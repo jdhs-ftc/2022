@@ -22,6 +22,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import android.annotation.SuppressLint;
+import android.graphics.Color;
 
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.roadrunner.geometry.Pose2d;
@@ -29,6 +30,7 @@ import com.acmerobotics.roadrunner.geometry.Vector2d;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.ColorSensor;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
@@ -61,15 +63,24 @@ public class DetectConeAuto extends LinearOpMode {
     //double tagsize = 0.166;
 
 
-    AprilTagDetection tagOfInterest = null;
+    public static AprilTagDetection tagOfInterest = null;
     Pose2d startPose;
+
 
     @Override
     public void runOpMode() throws InterruptedException {
-        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
+        ColorSensor color = hardwareMap.get(ColorSensor.class, "color");
+        boolean blue = color.blue() > 2500;
 
+        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
         for (LynxModule hub : allHubs) {
             hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+            if (blue) {
+                hub.setConstant(Color.BLUE);
+            } else {
+                hub.setConstant(Color.RED);
+            }
+
         }
         // Initialize roadrunner
 
@@ -94,8 +105,9 @@ public class DetectConeAuto extends LinearOpMode {
         // Blue Corner
         Pose2d redTeamBlueCornerPose = new Pose2d(36, -61.5, Math.toRadians(90));
         // Both
-        String selection = "Red Corner";
-        startPose = redTeamRedCornerPose;
+        String selection = "Blue Corner";
+        startPose = redTeamBlueCornerPose;
+        traj.generateTrajectories(drive, startPose);
 
 
         // Initialize camera
@@ -170,9 +182,11 @@ public class DetectConeAuto extends LinearOpMode {
             if (gamepad1.x) {
                 startPose = redTeamRedCornerPose;
                 selection = "Red Corner";
+                traj.generateTrajectories(drive, startPose); //TODO: TEST THIS!
             } else if (gamepad1.y) {
                 startPose = redTeamBlueCornerPose;
                 selection = "Blue Corner";
+                traj.generateTrajectories(drive, startPose);
             }
             telemetry.addLine(selection);
             telemetry.update();
@@ -188,228 +202,24 @@ public class DetectConeAuto extends LinearOpMode {
         if (tagOfInterest != null) {
             telemetry.addLine("Tag snapshot:\n");
             tagToTelemetry(tagOfInterest);
+            int realId = tagOfInterest.id + 1;
+            String message = "Parking in spot " + realId;
+            telemetry.speak(message);
             telemetry.update();
         } else {
             telemetry.addLine("No tag snapshot available, it was never sighted during the init loop :(");
+            telemetry.speak("Cone not found");
             telemetry.update();
         }
-        drive.setPoseEstimate(startPose);
-        TrajectorySequence park1 = drive.trajectorySequenceBuilder(startPose)
-                .strafeLeft(24)
-                .forward(25)
-                .build();
 
-        TrajectorySequence park2 = drive.trajectorySequenceBuilder(startPose)
-                .strafeLeft(24)
-                .forward(50)
-                .strafeRight(24)
-                .build();
-        TrajectorySequence park3 = drive.trajectorySequenceBuilder(startPose)
-                .strafeRight(22)
-                .forward(25)
-                .build();
-        TrajectorySequence tallThenConeRed = drive.trajectorySequenceBuilder(startPose)
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(0.5))
-                .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
-                .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
-                .strafeRight(12)
-                .splineToSplineHeading(new Pose2d(-12, -36, Math.toRadians(0)), Math.toRadians(90))
-                .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
-                .strafeLeft(12)
-                .forward(0.5)
-                .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-
-                .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
-                .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(-0.75))
-                .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-                .waitSeconds(1.5)
-                .back(2.5)
-                .resetVelConstraint()
-                .strafeRight(12)
-                .UNSTABLE_addTemporalMarkerOffset(-0.5, () -> motorControl.claw.setPower(0.25))
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> {
-                    motorControl.setMode(motorControl.combinedMode.BOTTOM);
-                    if (tagOfInterest != null) {
-                        if (tagOfInterest.id == 0) {
-                            // TODO: drive to 1 position
-                            TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(47)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backFar);
-
-                        } else if (tagOfInterest.id == 1) {
-                            // TODO: drive to 2 position
-
-                            TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(24)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backMiddle);
-                        } else if (tagOfInterest.id == 2) {
-                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(1)
-                                    .waitSeconds(1.5)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backSmall);
-                        }
-                    } else {
-                        TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                .back(0.5)
-                                .waitSeconds(1.5)
-                                .build();
-                        drive.followTrajectorySequenceAsync(backSmall);
-                    }
-                })
-                .build();
-        TrajectorySequence tallThenConeBlue = drive.trajectorySequenceBuilder(startPose)
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(0.5))
-                .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
-                .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
-                .strafeLeft(12)
-                .splineToSplineHeading(new Pose2d(12, -36, Math.toRadians(180)), Math.toRadians(90))
-                .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
-                .strafeRight(12)
-                .forward(0.5)
-                .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-
-                .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
-                .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(-0.75))
-                .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-                .waitSeconds(1.5)
-                .back(2.5)
-                .resetVelConstraint()
-                .strafeLeft(12)
-                .UNSTABLE_addTemporalMarkerOffset(-0.7, () -> motorControl.claw.setPower(0.5))
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> {
-                    motorControl.setMode(motorControl.combinedMode.BOTTOM);
-                    if (tagOfInterest != null) {
-                        if (tagOfInterest.id == 2) {
-                            // TODO: drive to 1 position
-                            TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(47)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backFar);
-
-                        } else if (tagOfInterest.id == 1) {
-                            // TODO: drive to 2 position
-
-                            TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(24)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backMiddle);
-                        } else if (tagOfInterest.id == 0) {
-                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(1)
-                                    .waitSeconds(1.5)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backSmall);
-                        }
-                    } else {
-                        TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                .back(0.5)
-                                .waitSeconds(1.5)
-                                .build();
-                        drive.followTrajectorySequenceAsync(backSmall);
-                    }
-
-                })
-
-                .build();
-        TrajectorySequence shortAndTallBlue = drive.trajectorySequenceBuilder(startPose)
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(0.5))
-                .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
-
-
-                .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
-                // place cone on small
-                .strafeLeft(12)
-                .forward(6)
-
-                //.UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-                .UNSTABLE_addTemporalMarkerOffset(-1, () -> motorControl.slide.setTargetPosition(1100))
-
-                .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
-                .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(-0.75))
-                .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
-
-                .waitSeconds(1.5)
-                .back(6)
-                .waitSeconds(0.1)
-                // go to cone stack
-                .strafeLeft(0.5)
-                .splineToConstantHeading(new Vector2d(12, -48), Math.toRadians(90))
-                .splineToSplineHeading(new Pose2d(12, -24, Math.toRadians(0)), Math.toRadians(90))
-                .splineToConstantHeading(new Vector2d(56, -11), Math.toRadians(0))
-                // pickup cone
-                .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
-                .forward(5)
-                .waitSeconds(1)
-                .UNSTABLE_addTemporalMarkerOffset(-2, () -> motorControl.slide.setTargetPosition(400)) // TODO: TUNE THIS
-                .UNSTABLE_addTemporalMarkerOffset(-1, () -> motorControl.claw.setPower(0.5))
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.slide.setTargetPosition(1100))
-                .back(5)
-
-                .turn(Math.toRadians(180))
-                .resetVelConstraint()
-                //TODO: pick up cone
-
-                .splineToConstantHeading(new Vector2d(12, -23.9), Math.toRadians(-90))
-                .splineToConstantHeading(new Vector2d(12, -24), Math.toRadians(-90))
-                .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
-                .forward(4)
-
-                .UNSTABLE_addTemporalMarkerOffset(-2, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-                .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
-                .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(-0.75))
-                .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
-
-
-                .waitSeconds(1.5)
-                .back(4)
-                .resetVelConstraint()
-                .strafeLeft(12)
-
-                .UNSTABLE_addTemporalMarkerOffset(-0.5, () -> motorControl.claw.setPower(0.25))
-                .UNSTABLE_addTemporalMarkerOffset(0, () -> {
-                    motorControl.setMode(motorControl.combinedMode.BOTTOM);
-                    if (tagOfInterest != null) {
-                        if (tagOfInterest.id == 2) {
-                            // TODO: drive to 1 position
-                            TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(47)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backFar);
-
-                        } else if (tagOfInterest.id == 1) {
-                            // TODO: drive to 2 position
-
-                            TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .back(24)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backMiddle);
-                        } else if (tagOfInterest.id == 0) {
-                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-                                    .waitSeconds(1.5)
-                                    .build();
-                            drive.followTrajectorySequenceAsync(backSmall);
-                        }
-                    } else {
-                        TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
-
-                                .waitSeconds(1.5)
-                                .build();
-                        drive.followTrajectorySequenceAsync(backSmall);
-                    }
-
-                })
-                .build();
 
 
         /* Actually do something useful */
         if (selection.equals("Red Corner")) {
-            drive.followTrajectorySequenceAsync(tallThenConeRed);
+            drive.followTrajectorySequenceAsync(traj.tallTallRed);
         } else {
             //drive.followTrajectorySequenceAsync(tallThenConeBlue);
-            drive.followTrajectorySequenceAsync(shortAndTallBlue);
+            drive.followTrajectorySequenceAsync(traj.tallTallBlue);
         }
         /*
         if (tagOfInterest == null) {
@@ -418,9 +228,9 @@ public class DetectConeAuto extends LinearOpMode {
              * since the tag was never sighted during INIT
              *
             if (selection.equals("Red Corner")) {
-                drive.followTrajectorySequenceAsync(tallThenConeRed);
+                drive.followTrajectorySequenceAsync(traj.tallThenConeRed);
             } else {
-                drive.followTrajectorySequenceAsync(tallThenConeBlue);
+                drive.followTrajectorySequenceAsync(traj.tallThenConeBlue);
             }
 
         } else {
@@ -432,14 +242,14 @@ public class DetectConeAuto extends LinearOpMode {
 
             if (tagOfInterest.id == 0) {
                 // TODO: drive to 1 position
-                drive.followTrajectorySequenceAsync(park1);
+                drive.followTrajectorySequenceAsync(traj.park1);
 
             } else if (tagOfInterest.id == 1) {
                 // TODO: drive to 2 position
-                drive.followTrajectorySequenceAsync(park2);
+                drive.followTrajectorySequenceAsync(traj.park2);
             } else if (tagOfInterest.id == 2) {
                 // TODO: drive to 3 position
-                drive.followTrajectorySequenceAsync(park3);
+                drive.followTrajectorySequenceAsync(traj.park3);
             }
             // do something else
         }*/
@@ -469,5 +279,444 @@ public class DetectConeAuto extends LinearOpMode {
         telemetry.addLine(String.format("Rotation Roll: %.2f degrees", Math.toDegrees(detection.pose.roll)));
     }
 
+    public static class traj {
+        static TrajectorySequence park1;
+        static TrajectorySequence park2;
+        static TrajectorySequence park3;
+        static TrajectorySequence tallThenConeRed;
+        static TrajectorySequence tallThenConeBlue;
+        static TrajectorySequence shortAndTallBlue;
+        static TrajectorySequence tallTallBlue;
+        static TrajectorySequence tallTallRed;
+        public static void generateTrajectories(SampleMecanumDrive drive, Pose2d startPose) {
+            drive.setPoseEstimate(startPose);
+            park1 = drive.trajectorySequenceBuilder(startPose)
+                    .strafeLeft(24)
+                    .forward(25)
+                    .build();
 
+            park2 = drive.trajectorySequenceBuilder(startPose)
+                    .strafeLeft(24)
+                    .forward(50)
+                    .strafeRight(24)
+                    .build();
+            park3 = drive.trajectorySequenceBuilder(startPose)
+                    .strafeRight(22)
+                    .forward(25)
+                    .build();
+          tallThenConeRed = drive.trajectorySequenceBuilder(startPose)
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
+                    .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
+                    .strafeRight(12)
+                    .splineToSplineHeading(new Pose2d(-12, -36, Math.toRadians(0)), Math.toRadians(90))
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
+                    .strafeLeft(12)
+                    .forward(0.5)
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+                    .waitSeconds(1.5)
+                    .back(2.5)
+                    .resetVelConstraint()
+                    .strafeRight(12)
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+                        motorControl.setMode(motorControl.combinedMode.BOTTOM);
+                        if (tagOfInterest != null) {
+                            if (tagOfInterest.id == 0) {
+                                // TODO: drive to 1 position
+                                TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(47)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backFar);
+
+                            } else if (tagOfInterest.id == 1) {
+                                // TODO: drive to 2 position
+
+                                TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(24)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backMiddle);
+                            } else if (tagOfInterest.id == 2) {
+                                TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(1)
+                                        .waitSeconds(1.5)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backSmall);
+                            }
+                        } else {
+                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                    .back(0.5)
+                                    .waitSeconds(1.5)
+                                    .build();
+                            drive.followTrajectorySequenceAsync(backSmall);
+                        }
+                    })
+                    .build();
+            tallThenConeBlue = drive.trajectorySequenceBuilder(startPose)
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
+                    .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
+                    .strafeLeft(12)
+                    .splineToSplineHeading(new Pose2d(12, -36, Math.toRadians(180)), Math.toRadians(90))
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
+                    .strafeRight(12)
+                    .forward(0.5)
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+                    .waitSeconds(1.5)
+                    .back(2.5)
+                    .resetVelConstraint()
+                    .strafeLeft(12)
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+                        motorControl.setMode(motorControl.combinedMode.BOTTOM);
+                        if (tagOfInterest != null) {
+                            if (tagOfInterest.id == 2) {
+                                // TODO: drive to 1 position
+                                TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(47)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backFar);
+
+                            } else if (tagOfInterest.id == 1) {
+                                // TODO: drive to 2 position
+
+                                TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(24)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backMiddle);
+                            } else if (tagOfInterest.id == 0) {
+                                TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(1)
+                                        .waitSeconds(1.5)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backSmall);
+                            }
+                        } else {
+                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                    .back(0.5)
+                                    .waitSeconds(1.5)
+                                    .build();
+                            drive.followTrajectorySequenceAsync(backSmall);
+                        }
+
+                    })
+
+                    .build();
+            shortAndTallBlue = drive.trajectorySequenceBuilder(startPose)
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
+
+
+                    .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
+                    // place cone on small
+                    .strafeLeft(12)
+                    .forward(6)
+
+                    //.UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+                    .UNSTABLE_addTemporalMarkerOffset(-1, () -> motorControl.slide.setTargetPosition(1100))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
+
+                    .waitSeconds(1.5)
+                    .back(6)
+                    .waitSeconds(0.1)
+                    // go to cone stack
+                    .strafeLeft(0.5)
+                    .splineToConstantHeading(new Vector2d(12, -48), Math.toRadians(90))
+                    .splineToSplineHeading(new Pose2d(12, -24, Math.toRadians(0)), Math.toRadians(90))
+                    .splineToConstantHeading(new Vector2d(56, -11), Math.toRadians(0))
+                    // pickup cone
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                    .forward(5)
+                    .waitSeconds(1)
+                    .UNSTABLE_addTemporalMarkerOffset(-2, () -> motorControl.slide.setTargetPosition(400)) // TODO: TUNE THIS
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
+                    .back(5)
+
+                    .turn(Math.toRadians(180))
+                    .resetVelConstraint()
+                    //TODO: pick up cone
+
+                    .splineToConstantHeading(new Vector2d(12, -23.9), Math.toRadians(-90))
+                    .splineToConstantHeading(new Vector2d(12, -24), Math.toRadians(-90))
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
+                    .forward(4)
+
+                    .UNSTABLE_addTemporalMarkerOffset(-2, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+
+                    .waitSeconds(1.5)
+                    .back(4)
+                    .resetVelConstraint()
+                    .strafeLeft(12)
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.5, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+                        motorControl.setMode(motorControl.combinedMode.BOTTOM);
+                        if (tagOfInterest != null) {
+                            if (tagOfInterest.id == 2) {
+                                // TODO: drive to 1 position
+                                TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(47)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backFar);
+
+                            } else if (tagOfInterest.id == 1) {
+                                // TODO: drive to 2 position
+
+                                TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .back(24)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backMiddle);
+                            } else if (tagOfInterest.id == 0) {
+                                TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .waitSeconds(1.5)
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backSmall);
+                            }
+                        } else {
+                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+
+                                    .waitSeconds(1.5)
+                                    .build();
+                            drive.followTrajectorySequenceAsync(backSmall);
+                        }
+
+                    })
+
+                    .build();
+            tallTallBlue = drive.trajectorySequenceBuilder(startPose)
+
+                                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                                .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
+
+
+                    .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
+                    .strafeLeft(12)
+                    .splineToSplineHeading(new Pose2d(12, -36, Math.toRadians(180)), Math.toRadians(90))
+                    .strafeRight(10)
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
+                    .forward(3.5)
+
+
+
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+
+                    .waitSeconds(1.5)
+
+                    .back(3.5)
+                    .addDisplacementMarker(() -> motorControl.setMode(motorControl.combinedMode.BOTTOM))
+
+                    .resetVelConstraint()
+                    .strafeRight(2)
+                    .addDisplacementMarker(() -> motorControl.slide.targetPosition = 350) // TODO: TUNE THIS
+                    .splineToSplineHeading(new Pose2d(24, -10.5, Math.toRadians(0)), Math.toRadians(0))
+                    .splineToConstantHeading(new Vector2d(57, -10.5), Math.toRadians(0))
+                    // pickup cone
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                    .addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
+
+                    .forward(5.25)
+
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
+                    .waitSeconds(1.5)
+
+
+                    .back(6)
+                    .resetVelConstraint()
+
+
+                    // place cone
+                    .splineToSplineHeading(new Pose2d(25, -12, Math.toRadians(90)), Math.toRadians(180))
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                    .forward(5)
+
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+
+                    .waitSeconds(1.5)
+                    .back(5)
+                    .resetVelConstraint()
+
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+                        motorControl.setMode(motorControl.combinedMode.BOTTOM);
+                        if (tagOfInterest != null) {
+                            if (tagOfInterest.id == 0) {
+                                // TODO: drive to 1 position
+                                TrajectorySequence parkSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                        // park1
+                                        .strafeLeft(2)
+                                        .splineToConstantHeading(new Vector2d(12, -24), Math.toRadians(270))
+                                        .build();
+                                drive.followTrajectorySequenceAsync(parkSmall);
+
+                            } else if (tagOfInterest.id == 1) {
+                                // TODO: drive to 2 position
+
+                                TrajectorySequence parkMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                        .strafeRight(2)
+                                        .splineToConstantHeading(new Vector2d(36, -24), Math.toRadians(270))
+                                        .build();
+                                drive.followTrajectorySequenceAsync(parkMiddle);
+                            } else if (tagOfInterest.id == 2) {
+                                TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                        .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                        .strafeRight(2)
+                                        .splineToConstantHeading(new Vector2d(36, -26), Math.toRadians(270))
+                                        .splineToConstantHeading(new Vector2d(60, -36), Math.toRadians(0))
+                                        .build();
+                                drive.followTrajectorySequenceAsync(backSmall);
+                            }
+                        } else {
+                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                    .strafeLeft(2)
+                                    .splineToConstantHeading(new Vector2d(12, -24), Math.toRadians(270))
+                                    .build();
+                            drive.followTrajectorySequenceAsync(backSmall);
+                        }
+
+                    })
+
+                    .build();
+            tallTallRed = drive.trajectorySequenceBuilder(startPose)
+                    /*
+                                .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                                .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
+
+                                 */
+
+
+                    .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
+                    .strafeRight(12)
+                    .splineToSplineHeading(new Pose2d(-12, -36, Math.toRadians(0)), Math.toRadians(90))
+                    .strafeLeft(10)
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
+                    .forward(3.5)
+
+
+                    /*
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                     */
+
+
+                    .waitSeconds(1.5)
+
+                    .back(3.5)
+                    //.addDisplacementMarker(() -> motorControl.setMode(motorControl.combinedMode.BOTTOM))
+
+                    .resetVelConstraint()
+                    .strafeLeft(2)
+                    //.addDisplacementMarker(() -> motorControl.slide.targetPosition = 350) // TODO: TUNE THIS
+                    .splineToSplineHeading(new Pose2d(-24, -10.5, Math.toRadians(180)), Math.toRadians(180))
+                    .splineToConstantHeading(new Vector2d(-57, -10.5), Math.toRadians(180))
+                    // pickup cone
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                    //.addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
+
+                    .forward(5.25)
+                    /*
+                    .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
+                    .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
+
+                     */
+                    .waitSeconds(1.5)
+
+
+                    .back(6)
+                    .resetVelConstraint()
+
+
+                    // place cone
+                    .splineToSplineHeading(new Pose2d(-25, -12, Math.toRadians(90)), Math.toRadians(0))
+                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                    .forward(5)
+                    /*
+                    .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                    .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
+                    .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
+                    .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
+
+                     */
+
+
+                    .waitSeconds(1.5)
+                    .back(5)
+                    .resetVelConstraint()
+                                /*
+                                .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+                                    motorControl.setMode(motorControl.combinedMode.BOTTOM);
+                                    if (tagOfInterest != null) {
+                                        if (tagOfInterest.id == 2) {
+                                            // TODO: drive to 1 position
+                                            TrajectorySequence parkSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                                    // park1
+                                                    .strafeRight(2)
+                                                    .splineToConstantHeading(new Vector2d(-12, -24), Math.toRadians(270))
+                                                    .build();
+                                            drive.followTrajectorySequenceAsync(parkSmall);
+
+                                        } else if (tagOfInterest.id == 1) {
+                                            // TODO: drive to 2 position
+
+                                            TrajectorySequence parkMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                                    .strafeLeft(2)
+                                                    .splineToConstantHeading(new Vector2d(-36, -24), Math.toRadians(270))
+                                                    .build();
+                                            drive.followTrajectorySequenceAsync(parkMiddle);
+                                        } else if (tagOfInterest.id == 0) {
+                                            TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                                    .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
+                                                    .strafeLeft(2)
+                                                    .splineToConstantHeading(new Vector2d(-36, -26), Math.toRadians(270))
+                                                    .splineToConstantHeading(new Vector2d(-60, -36), Math.toRadians(0))
+                                                    .build();
+                                            drive.followTrajectorySequenceAsync(backSmall);
+                                        }
+                                    } else {
+                                        TrajectorySequence backSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
+                                                .strafeRight(2)
+                                                .splineToConstantHeading(new Vector2d(-12, -24), Math.toRadians(270))
+                                                .build();
+                                        drive.followTrajectorySequenceAsync(backSmall);
+                                    }
+
+                                })
+
+                                 */
+                        .build();
+
+        }
+    }
 }

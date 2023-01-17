@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
 import com.acmerobotics.roadrunner.control.PIDCoefficients;
 import com.acmerobotics.roadrunner.control.PIDFController;
@@ -15,17 +14,13 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.drive.DriveConstants;
 import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
 import org.firstinspires.ftc.teamcode.vision.BlueConeDetectionPipeline;
 import org.firstinspires.ftc.teamcode.vision.PoleDetectionPipeline;
 import org.firstinspires.ftc.teamcode.vision.RedConeDetectionPipeline;
-import org.opencv.core.Rect;
 import org.openftc.easyopencv.OpenCvCamera;
-import org.openftc.easyopencv.OpenCvCameraFactory;
-import org.openftc.easyopencv.OpenCvCameraRotation;
 
 import java.util.List;
 
@@ -112,8 +107,9 @@ public class TeleopFieldCentric extends LinearOpMode {
 
         // Initiate Claw
         claw = hardwareMap.get(CRServo.class, "claw");
-        claw.setPower(0);
+        claw.setPower(0.5);
 
+        /*
         // Vision
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
         camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
@@ -136,6 +132,8 @@ public class TeleopFieldCentric extends LinearOpMode {
 
         telemetry.setMsTransmissionInterval(50);
         FtcDashboard.getInstance().startCameraStream(camera, 15);
+
+         */
         /* Variable Init */
         slideTargetPosition = 0.0;
         armTargetPosition = 0.0;
@@ -219,10 +217,11 @@ public class TeleopFieldCentric extends LinearOpMode {
                         ));
             }
             if (armMode != Mode.MOVING_DOWN && color.red() < 2500 && color.blue() < 2500) {
-                claw.setPower(gamepad2.left_trigger - gamepad2.right_trigger);
+                claw.setPower(0.5 + gamepad2.left_trigger - gamepad2.right_trigger);
             } else {
-                claw.setPower(0.25 + gamepad2.left_trigger - gamepad2.right_trigger);
+                claw.setPower(0.9 + gamepad2.left_trigger - gamepad2.right_trigger); //TODO UPDATE
             }
+
             //arm.setPower(gamepad2.right_stick_x * 0.5);
 
 
@@ -235,7 +234,7 @@ public class TeleopFieldCentric extends LinearOpMode {
             }
 
             // Slide
-            slideTargetPosition = slideTargetPosition + (-gamepad2.left_stick_y * 10);
+            slideTargetPosition = slideTargetPosition + (-gamepad2.left_stick_y * 20);
             if (gamepad2.y) {
                 slideTargetPosition = 1200;
                 armMode = Mode.MOVING_UP;
@@ -332,12 +331,6 @@ public class TeleopFieldCentric extends LinearOpMode {
                     } else {
                         arm.setPower(-0.25);
                     }
-                    if ((gamepad2.left_trigger == 0) && (gamepad2.right_trigger == 0)) {
-                        claw.setPower(0.1);
-                    } else {
-                        claw.setPower(gamepad2.left_trigger - gamepad2.right_trigger);
-                    }
-
                     break;
             }
             // if right bumper on gamepad2 pressed, reset the slide encoder
@@ -348,7 +341,6 @@ public class TeleopFieldCentric extends LinearOpMode {
 
 
             // Vision
-            Rect maxRect = redConeDetectionPipeline.getMaxRect();
             // Print pose to telemetry
             telemetry.addData("x", poseEstimate.getX());
             telemetry.addData("y", poseEstimate.getY());
@@ -363,10 +355,9 @@ public class TeleopFieldCentric extends LinearOpMode {
             telemetry.addData("Magnet", magnet.getState());
             telemetry.addData("Armstate", armMode);
             telemetry.addData("hubNames", hubNames);
-            telemetry.addData("maxRect", maxRect);
             telemetry.addData("colorBlue", color.blue());
             telemetry.addData("colorRed", color.red());
-            telemetry.addData("servoPower", claw.getPower());
+            telemetry.addData("servoPosition", claw.getPower());
             telemetry.update();
         }
     }
