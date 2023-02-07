@@ -27,14 +27,15 @@ import android.graphics.Color;
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.acmerobotics.roadrunner.geometry.Vector2d;
+import com.outoftheboxrobotics.photoncore.PhotonCore;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
-import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
-import org.firstinspires.ftc.teamcode.trajectorysequence.TrajectorySequence;
+import org.firstinspires.ftc.teamcode.roadrunnerconfig.drive.SampleMecanumDrive;
+import org.firstinspires.ftc.teamcode.roadrunnerconfig.trajectorysequence.TrajectorySequence;
 import org.firstinspires.ftc.teamcode.vision.AprilTagDetectionPipeline;
 import org.firstinspires.ftc.teamcode.vision.RedConeDetectionPipeline;
 import org.openftc.apriltag.AprilTagDetection;
@@ -43,7 +44,6 @@ import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
 
 import java.util.ArrayList;
-import java.util.List;
 
 @Autonomous(preselectTeleOp = "Teleop Field Centric")
 public class DetectConeAuto extends LinearOpMode {
@@ -69,19 +69,25 @@ public class DetectConeAuto extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
+        PhotonCore.enable();
         ColorSensor color = hardwareMap.get(ColorSensor.class, "color");
         boolean blue = color.blue() > 2500;
 
-        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
-        for (LynxModule hub : allHubs) {
-            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
-            if (blue) {
-                hub.setConstant(Color.BLUE);
-            } else {
-                hub.setConstant(Color.RED);
-            }
 
+
+        PhotonCore.CONTROL_HUB.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        if (blue) {
+            PhotonCore.CONTROL_HUB.setConstant(Color.BLUE);
+        } else {
+            PhotonCore.CONTROL_HUB.setConstant(Color.YELLOW);
         }
+        PhotonCore.EXPANSION_HUB.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        if (blue) {
+            PhotonCore.EXPANSION_HUB.setConstant(Color.BLUE);
+        } else {
+            PhotonCore.EXPANSION_HUB.setConstant(Color.YELLOW);
+        }
+
         // Initialize roadrunner
 
         SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
@@ -182,7 +188,7 @@ public class DetectConeAuto extends LinearOpMode {
             if (gamepad1.x) {
                 startPose = redTeamRedCornerPose;
                 selection = "Red Corner";
-                traj.generateTrajectories(drive, startPose); //TODO: TEST THIS!
+                traj.generateTrajectories(drive, startPose);
             } else if (gamepad1.y) {
                 startPose = redTeamBlueCornerPose;
                 selection = "Blue Corner";
@@ -221,38 +227,6 @@ public class DetectConeAuto extends LinearOpMode {
             //drive.followTrajectorySequenceAsync(tallThenConeBlue);
             drive.followTrajectorySequenceAsync(traj.tallTallBlue);
         }
-        /*
-        if (tagOfInterest == null) {
-            /*
-             * Insert your autonomous code here, presumably running some default configuration
-             * since the tag was never sighted during INIT
-             *
-            if (selection.equals("Red Corner")) {
-                drive.followTrajectorySequenceAsync(traj.tallThenConeRed);
-            } else {
-                drive.followTrajectorySequenceAsync(traj.tallThenConeBlue);
-            }
-
-        } else {
-            /*
-             * Insert your autonomous code here, probably using the tag pose to decide your configuration.
-             *
-
-            // e.g.
-
-            if (tagOfInterest.id == 0) {
-                // TODO: drive to 1 position
-                drive.followTrajectorySequenceAsync(traj.park1);
-
-            } else if (tagOfInterest.id == 1) {
-                // TODO: drive to 2 position
-                drive.followTrajectorySequenceAsync(traj.park2);
-            } else if (tagOfInterest.id == 2) {
-                // TODO: drive to 3 position
-                drive.followTrajectorySequenceAsync(traj.park3);
-            }
-            // do something else
-        }*/
         while (drive.isBusy() && !isStopRequested()) {
             drive.update();
             motorControl.update();
@@ -260,6 +234,9 @@ public class DetectConeAuto extends LinearOpMode {
             telemetry.addData("armMode", motorControl.arm.mode);
             telemetry.addData("slidePosition", motorControl.slide.targetPosition);
             telemetry.update();
+            if (drive.getPoseEstimate().getX() - PoseStorage.currentPose.getX() > 1 || drive.getPoseEstimate().getY() - PoseStorage.currentPose.getY() > 1) {
+                PoseStorage.currentPose = drive.getPoseEstimate();
+            }
         }
 
         // Transfer the current pose to PoseStorage so we can use it in TeleOp
@@ -294,7 +271,6 @@ public class DetectConeAuto extends LinearOpMode {
                     .strafeLeft(24)
                     .forward(25)
                     .build();
-
             park2 = drive.trajectorySequenceBuilder(startPose)
                     .strafeLeft(24)
                     .forward(50)
@@ -326,14 +302,13 @@ public class DetectConeAuto extends LinearOpMode {
                         motorControl.setMode(motorControl.combinedMode.BOTTOM);
                         if (tagOfInterest != null) {
                             if (tagOfInterest.id == 0) {
-                                // TODO: drive to 1 position
+
                                 TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                         .back(47)
                                         .build();
                                 drive.followTrajectorySequenceAsync(backFar);
 
                             } else if (tagOfInterest.id == 1) {
-                                // TODO: drive to 2 position
 
                                 TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                         .back(24)
@@ -377,14 +352,14 @@ public class DetectConeAuto extends LinearOpMode {
                         motorControl.setMode(motorControl.combinedMode.BOTTOM);
                         if (tagOfInterest != null) {
                             if (tagOfInterest.id == 2) {
-                                // TODO: drive to 1 position
+
                                 TrajectorySequence backFar = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                         .back(47)
                                         .build();
                                 drive.followTrajectorySequenceAsync(backFar);
 
                             } else if (tagOfInterest.id == 1) {
-                                // TODO: drive to 2 position
+
 
                                 TrajectorySequence backMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                         .back(24)
@@ -408,6 +383,7 @@ public class DetectConeAuto extends LinearOpMode {
                     })
 
                     .build();
+
             shortAndTallBlue = drive.trajectorySequenceBuilder(startPose)
                     .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
                     .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
@@ -506,9 +482,9 @@ public class DetectConeAuto extends LinearOpMode {
                     .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
                     .strafeLeft(12)
                     .splineToSplineHeading(new Pose2d(12, -36, Math.toRadians(180)), Math.toRadians(90))
-                    .strafeRight(10)
+                    .strafeRight(11.25)
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
-                    .forward(3.5)
+                    .forward(1.25)
 
 
 
@@ -521,8 +497,9 @@ public class DetectConeAuto extends LinearOpMode {
 
                     .waitSeconds(1.5)
 
-                    .back(3.5)
+                    .back(2)
                     .addDisplacementMarker(() -> motorControl.setMode(motorControl.combinedMode.BOTTOM))
+                    .addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
 
                     .resetVelConstraint()
                     .strafeRight(2)
@@ -533,21 +510,21 @@ public class DetectConeAuto extends LinearOpMode {
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
                     .addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
 
-                    .forward(5.25)
+                    .forward(5.5)
 
                     .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
                     .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
                     .waitSeconds(1.5)
 
 
-                    .back(6)
+                    .back(5.5)
                     .resetVelConstraint()
 
 
                     // place cone
-                    .splineToSplineHeading(new Pose2d(25, -12, Math.toRadians(90)), Math.toRadians(180))
+                    .splineToSplineHeading(new Pose2d(24, -12, Math.toRadians(90)), Math.toRadians(180))
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
-                    .forward(5)
+                    .forward(4)
 
                     .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
 
@@ -557,7 +534,7 @@ public class DetectConeAuto extends LinearOpMode {
 
 
                     .waitSeconds(1.5)
-                    .back(5)
+                    .back(4)
                     .resetVelConstraint()
 
                     .UNSTABLE_addTemporalMarkerOffset(0, () -> {
@@ -579,7 +556,7 @@ public class DetectConeAuto extends LinearOpMode {
                                 TrajectorySequence parkMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                         .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
                                         .strafeRight(2)
-                                        .splineToConstantHeading(new Vector2d(36, -24), Math.toRadians(270))
+                                        .splineToConstantHeading(new Vector2d(32, -24), Math.toRadians(270))
                                         .build();
                                 drive.followTrajectorySequenceAsync(parkMiddle);
                             } else if (tagOfInterest.id == 2) {
@@ -603,51 +580,51 @@ public class DetectConeAuto extends LinearOpMode {
 
                     .build();
             tallTallRed = drive.trajectorySequenceBuilder(startPose)
-                    /*
+
                                 .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
                                 .UNSTABLE_addTemporalMarkerOffset(0.25, () -> motorControl.slide.setTargetPosition(400))
 
-                                 */
+
 
 
                     .setAccelConstraint(SampleMecanumDrive.getAccelerationConstraint(15))
                     .strafeRight(12)
-                    .splineToSplineHeading(new Pose2d(-12, -36, Math.toRadians(0)), Math.toRadians(90))
-                    .strafeLeft(10)
+                    .splineToSplineHeading(new Pose2d(-12, -34.5, Math.toRadians(0)), Math.toRadians(90))
+                    .strafeLeft(11)
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(266.753), 11.31))
                     .forward(3.5)
 
 
-                    /*
+
                     .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
 
                     .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
                     .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
                     .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
 
-                     */
+
 
 
                     .waitSeconds(1.5)
 
                     .back(3.5)
-                    //.addDisplacementMarker(() -> motorControl.setMode(motorControl.combinedMode.BOTTOM))
+                    .addDisplacementMarker(() -> motorControl.setMode(motorControl.combinedMode.BOTTOM))
 
                     .resetVelConstraint()
                     .strafeLeft(2)
-                    //.addDisplacementMarker(() -> motorControl.slide.targetPosition = 350) // TODO: TUNE THIS
-                    .splineToSplineHeading(new Pose2d(-24, -10.5, Math.toRadians(180)), Math.toRadians(180))
-                    .splineToConstantHeading(new Vector2d(-57, -10.5), Math.toRadians(180))
+                    .addDisplacementMarker(() -> motorControl.slide.targetPosition = 350) // TODO: TUNE THIS
+                    .splineToSplineHeading(new Pose2d(-24, -13.5, Math.toRadians(-180)), Math.toRadians(180))
+                    .splineToConstantHeading(new Vector2d(-57, -13), Math.toRadians(180))
                     // pickup cone
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
-                    //.addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
+                    .addDisplacementMarker(() -> motorControl.arm.setMode(motorControl.arm.armMode.MOVING_DOWN))
 
-                    .forward(5.25)
-                    /*
+                    .forward(5.5)
+
                     .UNSTABLE_addTemporalMarkerOffset(0, () -> motorControl.claw.setPower(1))
                     .UNSTABLE_addTemporalMarkerOffset(1, () -> motorControl.slide.setTargetPosition(1100))
 
-                     */
+
                     .waitSeconds(1.5)
 
 
@@ -656,23 +633,24 @@ public class DetectConeAuto extends LinearOpMode {
 
 
                     // place cone
-                    .splineToSplineHeading(new Pose2d(-25, -12, Math.toRadians(90)), Math.toRadians(0))
+                    .splineToSplineHeading(new Pose2d(-22.5, -13, Math.toRadians(90)), Math.toRadians(0))
                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
-                    .forward(5)
-                    /*
+                    .strafeRight(1)
+                    .forward(6)
+
                     .UNSTABLE_addTemporalMarkerOffset(-3, () -> motorControl.setMode(motorControl.combinedMode.TOP))
 
                     .UNSTABLE_addTemporalMarkerOffset(-0.1, () -> motorControl.slide.setTargetPosition(motorControl.slide.getTargetPosition() - 300))
                     .UNSTABLE_addTemporalMarkerOffset(0.1, () -> motorControl.claw.setPower(0.5))
                     .UNSTABLE_addTemporalMarkerOffset(0.6, () -> motorControl.setMode(motorControl.combinedMode.TOP))
 
-                     */
+
 
 
                     .waitSeconds(1.5)
                     .back(5)
                     .resetVelConstraint()
-                                /*
+
                                 .UNSTABLE_addTemporalMarkerOffset(0, () -> {
                                     motorControl.setMode(motorControl.combinedMode.BOTTOM);
                                     if (tagOfInterest != null) {
@@ -714,7 +692,7 @@ public class DetectConeAuto extends LinearOpMode {
 
                                 })
 
-                                 */
+
                         .build();
 
         }

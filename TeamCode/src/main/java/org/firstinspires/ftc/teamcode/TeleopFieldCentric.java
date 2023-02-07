@@ -1,28 +1,31 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.acmerobotics.roadrunner.control.PIDCoefficients;
 import com.acmerobotics.roadrunner.control.PIDFController;
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.acmerobotics.roadrunner.geometry.Vector2d;
+import com.outoftheboxrobotics.photoncore.PhotonCore;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
-import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
-import org.firstinspires.ftc.teamcode.drive.DriveConstants;
-import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
+import org.firstinspires.ftc.teamcode.roadrunnerconfig.drive.DriveConstants;
+import org.firstinspires.ftc.teamcode.roadrunnerconfig.drive.SampleMecanumDrive;
 import org.firstinspires.ftc.teamcode.vision.BlueConeDetectionPipeline;
 import org.firstinspires.ftc.teamcode.vision.PoleDetectionPipeline;
 import org.firstinspires.ftc.teamcode.vision.RedConeDetectionPipeline;
 import org.openftc.easyopencv.OpenCvCamera;
-
-import java.util.List;
+import org.openftc.easyopencv.OpenCvCameraFactory;
+import org.openftc.easyopencv.OpenCvCameraRotation;
 
 /**
  * This opmode demonstrates how one would implement field centric control using
@@ -41,7 +44,7 @@ public class TeleopFieldCentric extends LinearOpMode {
     private final PIDFController headingController = new PIDFController(SampleMecanumDrive.HEADING_PID);
     DcMotorEx slide;
     DcMotorEx arm;
-    ColorSensor color;
+    //ColorSensor color;
     DigitalChannel magnet;
     double slideTargetPosition;
     double slideError;
@@ -55,18 +58,17 @@ public class TeleopFieldCentric extends LinearOpMode {
     RedConeDetectionPipeline redConeDetectionPipeline;
     BlueConeDetectionPipeline blueConeDetectionPipeline;
     PoleDetectionPipeline poleDetectionPipeline;
+    Mode armMode;
 
     @Override
     public void runOpMode() throws InterruptedException {
-        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
-        for (LynxModule hub : allHubs) {
-            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
-            hubNames = hubNames + hardwareMap.getNamesOf(hub);
-        }
+        armMode = Mode.DOWN;
+        PhotonCore.enable();
+        PhotonCore.CONTROL_HUB.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        PhotonCore.EXPANSION_HUB.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
 
 
         //Initialization Period
-        Mode armMode = Mode.DOWN;
         // RoadRunner Init
         // Initialize SampleMecanumDrive
         SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
@@ -102,14 +104,14 @@ public class TeleopFieldCentric extends LinearOpMode {
         arm.setCurrentAlert(4, CurrentUnit.AMPS);
         magnet = hardwareMap.get(DigitalChannel.class, "magnet");
         magnet.setMode(DigitalChannel.Mode.INPUT);
-        color = hardwareMap.get(ColorSensor.class, "color");
+        //color = hardwareMap.get(ColorSensor.class, "color");
 
 
         // Initiate Claw
         claw = hardwareMap.get(CRServo.class, "claw");
         claw.setPower(0.5);
 
-        /*
+
         // Vision
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
         camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
@@ -131,9 +133,11 @@ public class TeleopFieldCentric extends LinearOpMode {
         });
 
         telemetry.setMsTransmissionInterval(50);
+        telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
         FtcDashboard.getInstance().startCameraStream(camera, 15);
 
-         */
+
+
         /* Variable Init */
         slideTargetPosition = 0.0;
         armTargetPosition = 0.0;
@@ -147,15 +151,14 @@ public class TeleopFieldCentric extends LinearOpMode {
 
         //Run Period
 
-
         while (opModeIsActive() && !isStopRequested()) {
             // Update the controller input bounds
             if (gamepad1.left_bumper) {
-                speed = .25;
+                speed = .35;
             } else if (gamepad1.right_bumper) {
                 speed = 1;
             } else {
-                speed = .5;
+                speed = .35;
             }
 
 
@@ -216,10 +219,14 @@ public class TeleopFieldCentric extends LinearOpMode {
                                 headingInput
                         ));
             }
-            if (armMode != Mode.MOVING_DOWN && color.red() < 2500 && color.blue() < 2500) {
-                claw.setPower(0.5 + gamepad2.left_trigger - gamepad2.right_trigger);
+            Double clawPowerAsBool = 0.0;
+            if (gamepad1.left_bumper) {
+                clawPowerAsBool = 1.0;
+            }
+            if (armMode != Mode.MOVING_DOWN) {
+                claw.setPower(0.5 + gamepad2.left_trigger - gamepad2.right_trigger + clawPowerAsBool);
             } else {
-                claw.setPower(0.9 + gamepad2.left_trigger - gamepad2.right_trigger); //TODO UPDATE
+                claw.setPower(0.9 + gamepad2.left_trigger - gamepad2.right_trigger + clawPowerAsBool); //TODO UPDATE
             }
 
             //arm.setPower(gamepad2.right_stick_x * 0.5);
@@ -235,19 +242,20 @@ public class TeleopFieldCentric extends LinearOpMode {
 
             // Slide
             slideTargetPosition = slideTargetPosition + (-gamepad2.left_stick_y * 20);
-            if (gamepad2.y) {
+            slideTargetPosition = slideTargetPosition + (-gamepad2.left_stick_y * 20);
+            if (gamepad2.y || gamepad1.y) {
                 slideTargetPosition = 1200;
                 armMode = Mode.MOVING_UP;
             }
-            if (gamepad2.b) {
+            if (gamepad2.b || gamepad1.b) {
                 slideTargetPosition = 400;
                 armMode = Mode.MOVING_UP;
             }
-            if (gamepad2.a) {
+            if (gamepad2.a || gamepad1.a) {
                 slideTargetPosition = 20;
                 armMode = Mode.MOVING_DOWN;
             }
-            if (gamepad2.x) {
+            if (gamepad2.x || gamepad1.x) {
                 slideTargetPosition = 1200;
                 armMode = Mode.MOVING_DOWN;
             }
@@ -255,6 +263,8 @@ public class TeleopFieldCentric extends LinearOpMode {
                 armMode = Mode.DOWN;
                 arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
                 arm.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                slide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                slide.setMode(DcMotor.RunMode.RUN_TO_POSITION);
             }
             if (slideTargetPosition > 1100) {
                 slideTargetPosition = 1100;
@@ -310,7 +320,7 @@ public class TeleopFieldCentric extends LinearOpMode {
                     arm.setPower(-gamepad2.right_stick_y * 0.5);
                     break;
                 case MOVING_UP:
-                    if (arm.getCurrentPosition() >= 350 || gamepad2.x) {
+                    if (arm.getCurrentPosition() >= 350 || gamepad2.x || gamepad1.x) {
                         armMode = Mode.UP;
                         arm.setPower(0);
                     } else {
@@ -355,9 +365,10 @@ public class TeleopFieldCentric extends LinearOpMode {
             telemetry.addData("Magnet", magnet.getState());
             telemetry.addData("Armstate", armMode);
             telemetry.addData("hubNames", hubNames);
-            telemetry.addData("colorBlue", color.blue());
-            telemetry.addData("colorRed", color.red());
+            //telemetry.addData("colorBlue", color.blue());
+            //telemetry.addData("colorRed", color.red());
             telemetry.addData("servoPosition", claw.getPower());
+            telemetry.addData("poleWidth", poleDetectionPipeline.getMaxRect().width);
             telemetry.update();
         }
     }

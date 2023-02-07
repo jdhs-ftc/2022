@@ -11,7 +11,7 @@ import com.noahbres.meepmeep.roadrunner.entity.RoadRunnerBotEntity;
 public class MeepMeepTesting {
     public static void main(String[] args) {
         System.setProperty("sun.java2d.opengl", "true");
-        MeepMeep meepMeep = new MeepMeep(800);
+        MeepMeep meepMeep = new MeepMeep(1080);
         Pose2d startPose = new Pose2d(-36, -62, Math.toRadians(90));
         RoadRunnerBotEntity myBot = new DefaultBotBuilder(meepMeep)
                 // Set bot constraints: maxVel, maxAccel, maxAngVel, maxAngAccel, track width
@@ -52,7 +52,7 @@ public class MeepMeepTesting {
 
                                 .resetVelConstraint()
                                 .strafeLeft(2)
-                                //.addDisplacementMarker(() -> motorControl.slide.targetPosition = 350) // TODO: TUNE THIS
+                                //.addDisplacementMarker(() -> motorControl.slide.targetPosition = 350)
                                 .splineToSplineHeading(new Pose2d(-24, -10.5, Math.toRadians(180)), Math.toRadians(180))
                                 .splineToConstantHeading(new Vector2d(-57, -10.5), Math.toRadians(180))
                                 // pickup cone
@@ -94,7 +94,7 @@ public class MeepMeepTesting {
                                     motorControl.setMode(motorControl.combinedMode.BOTTOM);
                                     if (tagOfInterest != null) {
                                         if (tagOfInterest.id == 2) {
-                                            // TODO: drive to 1 position
+
                                             TrajectorySequence parkSmall = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
                                                     // park1
@@ -104,7 +104,7 @@ public class MeepMeepTesting {
                                             drive.followTrajectorySequenceAsync(parkSmall);
 
                                         } else if (tagOfInterest.id == 1) {
-                                            // TODO: drive to 2 position
+
 
                                             TrajectorySequence parkMiddle = drive.trajectorySequenceBuilder(drive.getPoseEstimate())
                                                     .setVelConstraint(SampleMecanumDrive.getVelocityConstraint(10, Math.toRadians(10), 11.31))
